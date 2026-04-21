@@ -1,4 +1,4 @@
-import streamlit as st
+'''import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
@@ -23,8 +23,33 @@ def load_resources():
         return ml_data, dl_meta, lstm_model
     except Exception as e:
         st.error(f"❌ 파일 로드 중 오류 발생: {e}")
-        return None, None, None
+        return None, None, None'''
+import streamlit as st
+import os
+import joblib
+from tensorflow.keras.models import load_model
 
+# 현재 파일(app.py)이 있는 디렉토리 경로를 가져옵니다.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+@st.cache_resource
+def load_resources():
+    try:
+        # 경로를 절대 경로로 병합 (파일명 대소문자 주의!)
+        ml_path = os.path.join(BASE_DIR, 'kgc_model.pkl')
+        meta_path = os.path.join(BASE_DIR, 'dl_metadata.pkl')
+        dl_path = os.path.join(BASE_DIR, 'kgc_lstm_model.keras')
+        
+        ml_data = joblib.load(ml_path)
+        dl_meta = joblib.load(meta_path)
+        lstm_model = load_model(dl_path)
+        
+        return ml_data, dl_meta, lstm_model
+    except Exception as e:
+        # 어떤 파일에서 에러가 났는지 상세히 출력하도록 수정
+        st.error(f"❌ 파일 로드 오류 상세: {e}")
+        return None, None, None
+        
 # 리소스 불러오기
 ml_data, dl_meta, lstm_model = load_resources()
 
