@@ -9,15 +9,15 @@ from tensorflow.keras.models import load_model
 @st.cache_resource
 def load_resources():
     try:
-        # 1. ML 모델 로드 (파일명: kgc_model.pkl)
+        # 1. ML 모델 로드
         ml_data = joblib.load('kgc_model.pkl')
         
-        # 2. DL 메타데이터 로드 (파일명: dl_metadata.pkl)
+        # 2. DL 메타데이터 로드
         dl_meta = joblib.load('dl_metadata.pkl')
         
-        # 3. LSTM 모델 로드 
-        # [수정] .h5 대신 호환성이 더 좋은 .keras 파일을 로드하도록 설정했습니다.
-        # 깃허브 사진에 kgc_lstm_model.keras가 있는 것을 확인했습니다.
+        # 3. LSTM 모델 로드 (호환성이 좋은 .keras 우선 사용)
+        # 만약 에러가 지속되면 로컬에서 모델을 다시 저장할 때 
+        # tensorflow 버전을 확인해야 합니다.
         lstm_model = load_model('kgc_lstm_model.keras') 
         
         return ml_data, dl_meta, lstm_model
@@ -32,13 +32,12 @@ ml_data, dl_meta, lstm_model = load_resources()
 st.set_page_config(page_title="KGC AI 통합 진단 시스템", layout="wide")
 st.title("🛡️ KGC 부여공장 AI 예지보전 통합 대시보드")
 
-# 모델 로드 실패 시 중단
 if ml_data is None or dl_meta is None or lstm_model is None:
     st.warning("⚠️ GitHub 저장소에서 모델 파일을 읽어오지 못했습니다.")
-    st.info("💡 팁: requirements.txt의 tensorflow 버전과 모델 저장 버전이 일치해야 합니다.")
+    st.info("💡 해결 방법: requirements.txt의 tensorflow 버전을 높이거나 모델을 다시 저장해야 합니다.")
     st.stop()
 
-# 모델 및 스케일러 할당
+# 모델 변수 할당
 clf_model = ml_data['model']
 scaler = dl_meta['scaler']
 feature_names = dl_meta.get('features', ['증삼기_내부온도', '추출기_상단온도', '건조기_출구온도', '이송펌프_회전속도', '가열히터_전류값'])
@@ -50,7 +49,6 @@ press = st.sidebar.slider("🔥 건조기 출구온도", 1390.0, 1440.0, 1415.0)
 speed = st.sidebar.slider("⚙️ 이송펌프 회전속도", 500, 2500, 1200)
 
 # --- 예측 로직 ---
-# [ML 예측]
 ml_input = pd.DataFrame([{
     '증삼기_내부온도': temp, 
     '추출기_상단온도': 1598, 
@@ -61,7 +59,7 @@ ml_input = pd.DataFrame([{
 ml_input = ml_input[feature_names]
 ml_prob = clf_model.predict_proba(ml_input)[0][1]
 
-# [DL 예측 - RUL]
+# DL 예측 (RUL)
 current_val = [temp, 1598, press, speed, 520]
 base_seq = np.tile(current_val, (50, 1))
 scaled_seq = scaler.transform(base_seq)
@@ -84,16 +82,12 @@ with col2:
     display_rul = max(0, pred_rul)
     st.metric("예상 잔여 수명", f"{display_rul:.1f} Cycles")
 
-    # 시각화 (영문 라벨 사용으로 깨짐 방지)
     fig, ax = plt.subplots(figsize=(6, 2))
     max_life = 200
     ax.barh(["RUL"], [max_life], color='#f0f2f6')
-    
     bar_color = '#2ecc71' if display_rul > 100 else '#f1c40f' if display_rul > 50 else '#e74c3c'
     ax.barh(["RUL"], [min(max_life, display_rul)], color=bar_color)
-    
     ax.set_xlim(0, max_life)
-    ax.set_title("Remaining Useful Life Gauge")
     st.pyplot(fig)
 
 st.divider()
