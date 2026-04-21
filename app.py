@@ -14,7 +14,7 @@ def load_resources():
         # DL 메타데이터 로드
         dl_meta = joblib.load('dl_metadata.pkl')
         # LSTM 모델 로드
-        lstm_model = load_model('kgc_lstm_model.h5')
+        lstm_model = load_model('kgc_lstm_model.keras')
         return ml_data, dl_meta, lstm_model
     except Exception as e:
         st.error(f"❌ 파일 로드 중 오류 발생: {e}")
