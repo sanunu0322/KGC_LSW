@@ -5,21 +5,20 @@ import joblib
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import load_model
 
-# --- [수정 1] 한글 폰트 설정 (리눅스 서버 환경 대응) ---
-# 스트림릿 클라우드(리눅스) 환경에서는 기본 폰트에 한글이 없어 깨질 수 있습니다.
-# 여기서는 차트 내 한글을 피하거나, 영문으로 표기하여 에러를 방지합니다.
-
 # --- 모델 및 데이터 로드 (캐싱 적용) ---
 @st.cache_resource
 def load_resources():
     try:
-        # [체크] 파일명이 깃허브에 올린 것과 토씨 하나 안 틀리고 똑같아야 합니다. (대소문자 구분)
+        # 1. ML 모델 로드 (파일명: kgc_model.pkl)
         ml_data = joblib.load('kgc_model.pkl')
+        
+        # 2. DL 메타데이터 로드 (파일명: dl_metadata.pkl)
         dl_meta = joblib.load('dl_metadata.pkl')
         
-        # [수정 2] 파일 확장자 확인 필수: .h5인지 .keras인지 확인 후 수정하세요.
-        # 만약 깃허브에 kgc_lstm_model.h5가 있다면 아래 줄을 .h5로 고쳐야 합니다.
-        lstm_model = load_model('kgc_lstm_model.h5') 
+        # 3. LSTM 모델 로드 
+        # [수정] .h5 대신 호환성이 더 좋은 .keras 파일을 로드하도록 설정했습니다.
+        # 깃허브 사진에 kgc_lstm_model.keras가 있는 것을 확인했습니다.
+        lstm_model = load_model('kgc_lstm_model.keras') 
         
         return ml_data, dl_meta, lstm_model
     except Exception as e:
@@ -33,15 +32,15 @@ ml_data, dl_meta, lstm_model = load_resources()
 st.set_page_config(page_title="KGC AI 통합 진단 시스템", layout="wide")
 st.title("🛡️ KGC 부여공장 AI 예지보전 통합 대시보드")
 
+# 모델 로드 실패 시 중단
 if ml_data is None or dl_meta is None or lstm_model is None:
-    st.warning("⚠️ 모델 파일(.pkl, .h5, .keras)이 GitHub 저장소의 루트 폴더에 있는지 확인해주세요.")
-    st.info("💡 팁: 파일명이 대소문자까지 일치하는지, 확장자가 올바른지 확인이 필요합니다.")
+    st.warning("⚠️ GitHub 저장소에서 모델 파일을 읽어오지 못했습니다.")
+    st.info("💡 팁: requirements.txt의 tensorflow 버전과 모델 저장 버전이 일치해야 합니다.")
     st.stop()
 
 # 모델 및 스케일러 할당
 clf_model = ml_data['model']
 scaler = dl_meta['scaler']
-# [수정 3] 학습 시 사용된 피처 순서 보장 (에러 방지)
 feature_names = dl_meta.get('features', ['증삼기_내부온도', '추출기_상단온도', '건조기_출구온도', '이송펌프_회전속도', '가열히터_전류값'])
 
 # --- 사이드바: 실시간 데이터 입력 ---
@@ -59,12 +58,10 @@ ml_input = pd.DataFrame([{
     '이송펌프_회전속도': speed, 
     '가열히터_전류값': 520
 }])
-# 컬럼 순서 맞춤
 ml_input = ml_input[feature_names]
 ml_prob = clf_model.predict_proba(ml_input)[0][1]
 
 # [DL 예측 - RUL]
-# [수정 4] 입력 데이터 구성 시 컬럼 순서 엄격 준수
 current_val = [temp, 1598, press, speed, 520]
 base_seq = np.tile(current_val, (50, 1))
 scaled_seq = scaler.transform(base_seq)
@@ -84,20 +81,20 @@ with col1:
 
 with col2:
     st.subheader("🧠 딥러닝: 잔여 수명 예측 (RUL)")
-    st.metric("예상 잔여 수명", f"{max(0, pred_rul):.1f} Cycles") # 음수 방지
+    display_rul = max(0, pred_rul)
+    st.metric("예상 잔여 수명", f"{display_rul:.1f} Cycles")
 
-    # [수정 5] 시각화 개선 (한글 깨짐 방지를 위해 영문 라벨 사용)
+    # 시각화 (영문 라벨 사용으로 깨짐 방지)
     fig, ax = plt.subplots(figsize=(6, 2))
-    max_life = 200 # 가상의 최대 수명
-    ax.barh(["RUL"], [max_life], color='#f0f2f6') # 배경
+    max_life = 200
+    ax.barh(["RUL"], [max_life], color='#f0f2f6')
     
-    # 수명에 따른 색상 변경
-    bar_color = '#2ecc71' if pred_rul > 100 else '#f1c40f' if pred_rul > 50 else '#e74c3c'
-    ax.barh(["RUL"], [min(max_life, pred_rul)], color=bar_color)
+    bar_color = '#2ecc71' if display_rul > 100 else '#f1c40f' if display_rul > 50 else '#e74c3c'
+    ax.barh(["RUL"], [min(max_life, display_rul)], color=bar_color)
     
     ax.set_xlim(0, max_life)
     ax.set_title("Remaining Useful Life Gauge")
     st.pyplot(fig)
 
 st.divider()
-st.info(f"💡 **AI 분석 의견:** 현재 {temp}도의 온도 추세가 지속될 경우, 설비는 약 {int(max(0, pred_rul))}사이클 후에 점검이 필요할 것으로 예측됩니다.")
+st.info(f"💡 **AI 분석 의견:** 현재 {temp}도의 온도 추세가 지속될 경우, 설비는 약 {int(display_rul)}사이클 후에 점검이 필요할 것으로 예측됩니다.")
