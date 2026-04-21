@@ -19,7 +19,7 @@ def load_resources():
         
         # [수정 2] 파일 확장자 확인 필수: .h5인지 .keras인지 확인 후 수정하세요.
         # 만약 깃허브에 kgc_lstm_model.h5가 있다면 아래 줄을 .h5로 고쳐야 합니다.
-        lstm_model = load_model('kgc_lstm_model.keras') 
+        lstm_model = load_model('kgc_lstm_model.h5') 
         
         return ml_data, dl_meta, lstm_model
     except Exception as e:
